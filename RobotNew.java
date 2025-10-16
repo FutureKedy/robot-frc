@@ -24,13 +24,13 @@ public class Robot extends TimedRobot {
   private static final Timer timer = new Timer();
 
   // ===== Configurable Constants =====
-  private static final double DRIVE_SPEED_LIMIT = 0.4;
-  private static final double TURN_SPEED_LIMIT = 0.3;
   private static final double LIFT_SPEED = 0.4;
   private static final double AUTO_DRIVE_SPEED = 0.4;
   private static final double AUTO_LIFT_SPEED = 0.4;
   private static final double DEADZONE = 0.05;
   private static final double SHORT_LIFT_DURATION = 0.65; // seconds
+  private static final double NORMAL_SENSITIVITY = 0.6; // Base speed multiplier
+  private static final double TURBO_SENSITIVITY = 1.0;  // Turbo (full speed)
 
   // Lift control timing variables
   private boolean liftActive = false;
@@ -90,11 +90,24 @@ public class Robot extends TimedRobot {
   @Override
   public void teleopPeriodic() {
     // ----- Drive control -----
-    double speed = applyDeadband(driverJoystick.getRawAxis(1)) * DRIVE_SPEED_LIMIT;
-    double turn = -applyDeadband(driverJoystick.getRawAxis(4)) * TURN_SPEED_LIMIT;
+    double rawSpeed = driverJoystick.getRawAxis(1);  // Forward/back
+    double rawTurn = -driverJoystick.getRawAxis(4);  // Left/right
 
-    double left = speed + turn;
-    double right = speed - turn;
+    // Apply deadband
+    rawSpeed = applyDeadband(rawSpeed);
+    rawTurn = applyDeadband(rawTurn);
+
+    // Smooth power curve for fine control
+    double curvedSpeed = Math.copySign(Math.pow(Math.abs(rawSpeed), 1.5), rawSpeed);
+    double curvedTurn = Math.copySign(Math.pow(Math.abs(rawTurn), 1.5), rawTurn);
+
+    // Check turbo mode (Button 5 example)
+    boolean turboMode = driverJoystick.getRawButton(5);
+    double sensitivity = turboMode ? TURBO_SENSITIVITY : NORMAL_SENSITIVITY;
+
+    // Apply sensitivity
+    double left = (curvedSpeed + curvedTurn) * sensitivity;
+    double right = (curvedSpeed - curvedTurn) * sensitivity;
 
     setDrive(left, right);
 
@@ -102,15 +115,15 @@ public class Robot extends TimedRobot {
     boolean shortLiftPressed = driverJoystick.getRawButton(3);
     boolean manualLiftPressed = driverJoystick.getRawButton(1);
 
+    // Non-blocking short lift
     if (shortLiftPressed && !liftActive) {
       liftActive = true;
       liftStartTime = Timer.getFPGATimestamp();
     }
 
-    // Handle short timed lift (non-blocking)
     if (liftActive) {
       if (Timer.getFPGATimestamp() - liftStartTime < SHORT_LIFT_DURATION) {
-        upMotor.set(LIFT_SPEED * 0.25); // gentle short lift
+        upMotor.set(LIFT_SPEED * 0.25);
       } else {
         liftActive = false;
         upMotor.set(0);
@@ -150,4 +163,3 @@ public class Robot extends TimedRobot {
     stopAll();
   }
 }
-
