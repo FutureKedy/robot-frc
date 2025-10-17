@@ -13,7 +13,7 @@ class Robot(wpilib.TimedRobot):
     BACK_RIGHT_ID = 16
     UP_MOTOR_ID = 15
 
-    # ===== Configurable Constants =====
+ 
     LIFT_SPEED = 0.4
     AUTO_DRIVE_SPEED = 0.4
     AUTO_LIFT_SPEED = 0.4
