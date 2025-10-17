@@ -6,7 +6,7 @@ import math
 class Robot(wpilib.TimedRobot):
     """FRC Robot program rewritten in Python for RobotPy (WPILib)."""
 
-    # ===== Motor CAN IDs =====
+    
     FRONT_LEFT_ID = 12
     BACK_LEFT_ID = 11
     FRONT_RIGHT_ID = 13
@@ -114,7 +114,7 @@ class Robot(wpilib.TimedRobot):
     def apply_deadband(self, value):
         return 0.0 if abs(value) < self.DEADZONE else value
 
-    # ===== Disabled / Test =====
+
     def disabledInit(self):
         self.stop_all()
 
