@@ -29,8 +29,8 @@ public class Robot extends TimedRobot {
   private static final double AUTO_LIFT_SPEED = 0.4;
   private static final double DEADZONE = 0.05;
   private static final double SHORT_LIFT_DURATION = 0.65; // seconds
-  private static final double NORMAL_SENSITIVITY = 0.6; // Base speed multiplier
-  private static final double TURBO_SENSITIVITY = 1.0;  // Turbo (full speed)
+  private static final double NORMAL_SENSITIVITY = 0.5; // Base speed multiplier
+  private static final double TURBO_SENSITIVITY = 0.8;  // Turbo (full speed)
 
   // Lift control timing variables
   private boolean liftActive = false;
