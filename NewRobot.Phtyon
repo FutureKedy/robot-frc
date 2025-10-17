@@ -4,6 +4,8 @@ import math
 
 
 class Robot(wpilib.TimedRobot):
+    """FRC Robot program rewritten in Python for RobotPy (WPILib)."""
+
     # ===== Motor CAN IDs =====
     FRONT_LEFT_ID = 12
     BACK_LEFT_ID = 11
@@ -21,14 +23,13 @@ class Robot(wpilib.TimedRobot):
     TURBO_SENSITIVITY = 1.0
 
     def robotInit(self):
-        # Motor setup
+        """Initialize motors, joystick, and timers."""
         self.front_left_motor = CANSparkMax(self.FRONT_LEFT_ID, CANSparkLowLevel.MotorType.kBrushed)
         self.back_left_motor = CANSparkMax(self.BACK_LEFT_ID, CANSparkLowLevel.MotorType.kBrushed)
         self.front_right_motor = CANSparkMax(self.FRONT_RIGHT_ID, CANSparkLowLevel.MotorType.kBrushed)
         self.back_right_motor = CANSparkMax(self.BACK_RIGHT_ID, CANSparkLowLevel.MotorType.kBrushed)
         self.up_motor = CANSparkMax(self.UP_MOTOR_ID, CANSparkLowLevel.MotorType.kBrushed)
 
-        # Controller and timer
         self.driver_joystick = wpilib.Joystick(0)
         self.timer = wpilib.Timer()
 
@@ -61,9 +62,9 @@ class Robot(wpilib.TimedRobot):
         self.lift_active = False
 
     def teleopPeriodic(self):
-        # ----- Drive control -----
-        raw_speed = self.driver_joystick.getRawAxis(1)  # Forward/back
-        raw_turn = -self.driver_joystick.getRawAxis(4)  # Left/right
+        # Drive control
+        raw_speed = self.driver_joystick.getRawAxis(1)
+        raw_turn = -self.driver_joystick.getRawAxis(4)
 
         raw_speed = self.apply_deadband(raw_speed)
         raw_turn = self.apply_deadband(raw_turn)
@@ -79,16 +80,15 @@ class Robot(wpilib.TimedRobot):
 
         self.set_drive(left_power, right_power)
 
-        # ----- Lift control -----
+        # Lift control
         short_lift_pressed = self.driver_joystick.getRawButton(3)
         manual_lift_pressed = self.driver_joystick.getRawButton(1)
 
-        # Start short lift
+        # Short lift (non-blocking)
         if short_lift_pressed and not self.lift_active:
             self.lift_active = True
             self.lift_start_time = wpilib.Timer.getFPGATimestamp()
 
-        # Run short lift non-blocking
         if self.lift_active:
             if wpilib.Timer.getFPGATimestamp() - self.lift_start_time < self.SHORT_LIFT_DURATION:
                 self.up_motor.set(self.LIFT_SPEED * 0.25)
@@ -100,7 +100,7 @@ class Robot(wpilib.TimedRobot):
         else:
             self.up_motor.set(0)
 
-    # ===== HELPER FUNCTIONS =====
+    # ===== Helper Methods =====
     def set_drive(self, left, right):
         self.front_left_motor.set(left)
         self.back_left_motor.set(left)
@@ -114,7 +114,7 @@ class Robot(wpilib.TimedRobot):
     def apply_deadband(self, value):
         return 0.0 if abs(value) < self.DEADZONE else value
 
-    # ===== DISABLED / TEST =====
+    # ===== Disabled / Test =====
     def disabledInit(self):
         self.stop_all()
 
@@ -124,3 +124,4 @@ class Robot(wpilib.TimedRobot):
 
 if __name__ == "__main__":
     wpilib.run(Robot)
+
