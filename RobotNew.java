@@ -29,8 +29,25 @@ public class Robot extends TimedRobot {
   private static final double AUTO_LIFT_SPEED = 0.4;
   private static final double DEADZONE = 0.05;
   private static final double SHORT_LIFT_DURATION = 0.65; // seconds
-  private static final double NORMAL_SENSITIVITY = 0.5; // Base speed multiplier
-  private static final double TURBO_SENSITIVITY = 0.8;  // Turbo (full speed)
+  private static final double NORMAL_SENSITIVITY = 0.5; 
+  private static final double TURBO_SENSITIVITY = 0.8;
+
+  // ===== Gear System =====
+  private static final int GEAR_SLOW = 0;
+  private static final int GEAR_NORMAL = 1;
+  private static final int GEAR_FAST = 2;
+  private int currentGear = GEAR_NORMAL;
+
+  // Gear-specific speed caps
+  private static final double[] GEAR_MAX_SPEED = { 0.3, 0.5, 0.8 };
+  private static final double[] GEAR_SENSITIVITY = { 0.4, 0.6, 0.8 };
+
+  // Button IDs (change if needed)
+  private static final int BUTTON_GEAR_UP = 7;   // L2
+  private static final int BUTTON_GEAR_DOWN = 8; // R2
+
+  private boolean gearUpPressedLast = false;
+  private boolean gearDownPressedLast = false;
 
   // Lift control timing variables
   private boolean liftActive = false;
@@ -60,23 +77,16 @@ public class Robot extends TimedRobot {
   public void autonomousPeriodic() {
     double time = timer.get();
 
-    // Phase 1: drive forward (0–3s)
     if (time < 3.0) {
       setDrive(AUTO_DRIVE_SPEED, 0);
       upMotor.set(0);
-    }
-    // Phase 2: stop (3–4s)
-    else if (time < 4.0) {
+    } else if (time < 4.0) {
       setDrive(0, 0);
       upMotor.set(0);
-    }
-    // Phase 3: lift (4–5s)
-    else if (time < 5.0) {
+    } else if (time < 5.0) {
       setDrive(0, 0);
       upMotor.set(AUTO_LIFT_SPEED);
-    }
-    // Phase 4: stop everything after 5s
-    else {
+    } else {
       stopAll();
     }
   }
@@ -85,29 +95,48 @@ public class Robot extends TimedRobot {
   @Override
   public void teleopInit() {
     liftActive = false;
+    currentGear = GEAR_NORMAL;
   }
 
   @Override
   public void teleopPeriodic() {
-    // ----- Drive control -----
-    double rawSpeed = driverJoystick.getRawAxis(1);  // Forward/back
-    double rawTurn = -driverJoystick.getRawAxis(4);  // Left/right
+    // ----- Gear shifting -----
+    boolean gearUpPressed = driverJoystick.getRawButton(BUTTON_GEAR_UP);
+    boolean gearDownPressed = driverJoystick.getRawButton(BUTTON_GEAR_DOWN);
 
-    // Apply deadband
+    if (gearUpPressed && !gearUpPressedLast) {
+      if (currentGear < GEAR_FAST) currentGear++;
+    }
+    if (gearDownPressed && !gearDownPressedLast) {
+      if (currentGear > GEAR_SLOW) currentGear--;
+    }
+
+    gearUpPressedLast = gearUpPressed;
+    gearDownPressedLast = gearDownPressed;
+
+    // ----- Drive control -----
+    double rawSpeed = driverJoystick.getRawAxis(1);  
+    double rawTurn = -driverJoystick.getRawAxis(4);  
+
     rawSpeed = applyDeadband(rawSpeed);
     rawTurn = applyDeadband(rawTurn);
 
-    // Smooth power curve for fine control
     double curvedSpeed = Math.copySign(Math.pow(Math.abs(rawSpeed), 1.5), rawSpeed);
     double curvedTurn = Math.copySign(Math.pow(Math.abs(rawTurn), 1.5), rawTurn);
 
-    // Check turbo mode (Button 5 example)
     boolean turboMode = driverJoystick.getRawButton(5);
     double sensitivity = turboMode ? TURBO_SENSITIVITY : NORMAL_SENSITIVITY;
 
-    // Apply sensitivity
-    double left = (curvedSpeed + curvedTurn) * sensitivity;
-    double right = (curvedSpeed - curvedTurn) * sensitivity;
+    // Combine gear sensitivity and normal sensitivity
+    double effectiveSensitivity = (sensitivity * 0.7) + (GEAR_SENSITIVITY[currentGear] * 0.3);
+    double maxSpeed = GEAR_MAX_SPEED[currentGear];
+
+    double left = (curvedSpeed + curvedTurn) * effectiveSensitivity;
+    double right = (curvedSpeed - curvedTurn) * effectiveSensitivity;
+
+    // Apply gear-based max speed cap
+    left = clamp(left, -maxSpeed, maxSpeed);
+    right = clamp(right, -maxSpeed, maxSpeed);
 
     setDrive(left, right);
 
@@ -115,7 +144,6 @@ public class Robot extends TimedRobot {
     boolean shortLiftPressed = driverJoystick.getRawButton(3);
     boolean manualLiftPressed = driverJoystick.getRawButton(1);
 
-    // Non-blocking short lift
     if (shortLiftPressed && !liftActive) {
       liftActive = true;
       liftStartTime = Timer.getFPGATimestamp();
@@ -152,7 +180,10 @@ public class Robot extends TimedRobot {
     return Math.abs(value) < DEADZONE ? 0.0 : value;
   }
 
-  // ===== OPTIONAL PLACEHOLDERS =====
+  private double clamp(double val, double min, double max) {
+    return Math.max(min, Math.min(max, val));
+  }
+
   @Override
   public void disabledInit() {
     stopAll();
