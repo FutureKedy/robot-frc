@@ -28,8 +28,8 @@ public class Robot extends TimedRobot {
   private static final double AUTO_DRIVE_SPEED = 0.4;
   private static final double AUTO_LIFT_SPEED = 0.4;
   private static final double DEADZONE = 0.05;
-  private static final double SHORT_LIFT_DURATION = 0.65; // seconds
-  private static final double NORMAL_SENSITIVITY = 0.5; 
+  private static final double SHORT_LIFT_DURATION = 0.65;
+  private static final double NORMAL_SENSITIVITY = 0.5;
   private static final double TURBO_SENSITIVITY = 0.8;
 
   // ===== Gear System =====
@@ -38,16 +38,19 @@ public class Robot extends TimedRobot {
   private static final int GEAR_FAST = 2;
   private int currentGear = GEAR_NORMAL;
 
-  // Gear-specific speed caps
   private static final double[] GEAR_MAX_SPEED = { 0.3, 0.5, 0.8 };
   private static final double[] GEAR_SENSITIVITY = { 0.4, 0.6, 0.8 };
+  private static final double GEAR_MIN_SPEED = GEAR_MAX_SPEED[0] * 0.2; // Base minimum speed shared by all gears
 
   // Button IDs (change if needed)
-  private static final int BUTTON_GEAR_UP = 7;   // L2
-  private static final int BUTTON_GEAR_DOWN = 8; // R2
+  private static final int BUTTON_GEAR_UP = 7;     // L2
+  private static final int BUTTON_GEAR_DOWN = 8;   // R2
+  private static final int BUTTON_GEAR_LOCK = 2;   // Square button
 
   private boolean gearUpPressedLast = false;
   private boolean gearDownPressedLast = false;
+  private boolean gearLockPressedLast = false;
+  private boolean gearLocked = false;
 
   // Lift control timing variables
   private boolean liftActive = false;
@@ -58,7 +61,6 @@ public class Robot extends TimedRobot {
     SparkMaxConfig motorConfig = new SparkMaxConfig();
     motorConfig.idleMode(SparkBaseConfig.IdleMode.kBrake);
 
-    // Apply configuration to all motors
     frontLeftMotor.configure(motorConfig, ResetMode.kResetSafeParameters, PersistMode.kPersistParameters);
     backLeftMotor.configure(motorConfig, ResetMode.kResetSafeParameters, PersistMode.kPersistParameters);
     frontRightMotor.configure(motorConfig, ResetMode.kResetSafeParameters, PersistMode.kPersistParameters);
@@ -96,27 +98,37 @@ public class Robot extends TimedRobot {
   public void teleopInit() {
     liftActive = false;
     currentGear = GEAR_NORMAL;
+    gearLocked = false;
   }
 
   @Override
   public void teleopPeriodic() {
+    // ----- Gear lock toggle -----
+    boolean gearLockPressed = driverJoystick.getRawButton(BUTTON_GEAR_LOCK);
+    if (gearLockPressed && !gearLockPressedLast) {
+      gearLocked = !gearLocked;
+    }
+    gearLockPressedLast = gearLockPressed;
+
     // ----- Gear shifting -----
-    boolean gearUpPressed = driverJoystick.getRawButton(BUTTON_GEAR_UP);
-    boolean gearDownPressed = driverJoystick.getRawButton(BUTTON_GEAR_DOWN);
+    if (!gearLocked) {
+      boolean gearUpPressed = driverJoystick.getRawButton(BUTTON_GEAR_UP);
+      boolean gearDownPressed = driverJoystick.getRawButton(BUTTON_GEAR_DOWN);
 
-    if (gearUpPressed && !gearUpPressedLast) {
-      if (currentGear < GEAR_FAST) currentGear++;
-    }
-    if (gearDownPressed && !gearDownPressedLast) {
-      if (currentGear > GEAR_SLOW) currentGear--;
-    }
+      if (gearUpPressed && !gearUpPressedLast) {
+        if (currentGear < GEAR_FAST) currentGear++;
+      }
+      if (gearDownPressed && !gearDownPressedLast) {
+        if (currentGear > GEAR_SLOW) currentGear--;
+      }
 
-    gearUpPressedLast = gearUpPressed;
-    gearDownPressedLast = gearDownPressed;
+      gearUpPressedLast = gearUpPressed;
+      gearDownPressedLast = gearDownPressed;
+    }
 
     // ----- Drive control -----
-    double rawSpeed = driverJoystick.getRawAxis(1);  
-    double rawTurn = -driverJoystick.getRawAxis(4);  
+    double rawSpeed = driverJoystick.getRawAxis(1);
+    double rawTurn = -driverJoystick.getRawAxis(4);
 
     rawSpeed = applyDeadband(rawSpeed);
     rawTurn = applyDeadband(rawTurn);
@@ -127,16 +139,15 @@ public class Robot extends TimedRobot {
     boolean turboMode = driverJoystick.getRawButton(5);
     double sensitivity = turboMode ? TURBO_SENSITIVITY : NORMAL_SENSITIVITY;
 
-    // Combine gear sensitivity and normal sensitivity
     double effectiveSensitivity = (sensitivity * 0.7) + (GEAR_SENSITIVITY[currentGear] * 0.3);
     double maxSpeed = GEAR_MAX_SPEED[currentGear];
 
     double left = (curvedSpeed + curvedTurn) * effectiveSensitivity;
     double right = (curvedSpeed - curvedTurn) * effectiveSensitivity;
 
-    // Apply gear-based max speed cap
-    left = clamp(left, -maxSpeed, maxSpeed);
-    right = clamp(right, -maxSpeed, maxSpeed);
+    // Clamp output with shared min speed and gear-dependent max speed
+    left = clampWithMin(left, -maxSpeed, maxSpeed, GEAR_MIN_SPEED);
+    right = clampWithMin(right, -maxSpeed, maxSpeed, GEAR_MIN_SPEED);
 
     setDrive(left, right);
 
@@ -182,6 +193,14 @@ public class Robot extends TimedRobot {
 
   private double clamp(double val, double min, double max) {
     return Math.max(min, Math.min(max, val));
+  }
+
+  private double clampWithMin(double val, double min, double max, double minMagnitude) {
+    if (val == 0) return 0;
+    double sign = Math.signum(val);
+    double abs = Math.abs(val);
+    if (abs < minMagnitude) abs = minMagnitude;
+    return sign * Math.min(abs, max);
   }
 
   @Override
