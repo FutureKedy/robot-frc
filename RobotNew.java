@@ -32,9 +32,6 @@ public class Robot extends TimedRobot {
    1  → Left Stick Y
    2  → Right Stick X
    3  → Right Stick Y
-   4  → D-Pad X (some drivers)
-   5  → D-Pad Y (some drivers)
-   L2/R2 can appear as analog axes depending on driver mode.
    ===========================================================
   */
 
@@ -64,14 +61,14 @@ public class Robot extends TimedRobot {
   private static final int GEAR_FAST = 2;
   private int currentGear = GEAR_NORMAL;
 
-  private static final double[] GEAR_MAX_SPEED = { 0.3, 0.5, 0.8 };
+  private static final double[] GEAR_MAX_SPEED = { 0.1, 0.5, 1.0 };
   private static final double[] GEAR_SENSITIVITY = { 0.4, 0.6, 0.8 };
-  private static final double GEAR_MIN_SPEED = 0.1; // Shared minimum for all gears
+  private static final double GEAR_MIN_SPEED = 0.1;
 
-  // ===== Button Assignments (Based on Logitech F310) =====
+  // ===== Button Assignments =====
   private static final int BUTTON_A = 1;
   private static final int BUTTON_B = 2;
-  private static final int BUTTON_X = 3; // Square equivalent
+  private static final int BUTTON_X = 3; // Square
   private static final int BUTTON_Y = 4;
   private static final int BUTTON_LB = 5;
   private static final int BUTTON_RB = 6;
@@ -81,18 +78,15 @@ public class Robot extends TimedRobot {
   private static final int BUTTON_R3 = 10;
 
   // ===== Custom Control Bindings =====
-  private static final int BUTTON_GEAR_UP = BUTTON_RB;   // Gear up
-  private static final int BUTTON_GEAR_DOWN = BUTTON_LB; // Gear down
-  private static final int BUTTON_GEAR_LOCK = BUTTON_X;  // Lock/unlock gear
-  private static final int BUTTON_SHORT_LIFT = BUTTON_Y; // Short lift
-  private static final int BUTTON_MANUAL_LIFT = BUTTON_A; // Manual lift
-  private static final int BUTTON_TURBO = BUTTON_B; // Turbo mode toggle
+  private static final int BUTTON_GEAR_UP = BUTTON_X; // Square
+  private static final int BUTTON_GEAR_DOWN = BUTTON_A; // X (A button)
+  private static final int BUTTON_SHORT_LIFT = BUTTON_Y;
+  private static final int BUTTON_MANUAL_LIFT = BUTTON_B;
+  private static final int BUTTON_TURBO = BUTTON_RB;
 
   // ===== State Tracking =====
   private boolean gearUpPressedLast = false;
   private boolean gearDownPressedLast = false;
-  private boolean gearLockPressedLast = false;
-  private boolean gearLocked = false;
 
   private boolean liftActive = false;
   private double liftStartTime = 0.0;
@@ -137,37 +131,28 @@ public class Robot extends TimedRobot {
   public void teleopInit() {
     liftActive = false;
     currentGear = GEAR_NORMAL;
-    gearLocked = false;
   }
 
   @Override
   public void teleopPeriodic() {
-    // --- Gear lock toggle ---
-    boolean gearLockPressed = driverJoystick.getRawButton(BUTTON_GEAR_LOCK);
-    if (gearLockPressed && !gearLockPressedLast) {
-      gearLocked = !gearLocked;
-    }
-    gearLockPressedLast = gearLockPressed;
+    // --- Gear shifting ---
+    boolean gearUpPressed = driverJoystick.getRawButton(BUTTON_GEAR_UP);
+    boolean gearDownPressed = driverJoystick.getRawButton(BUTTON_GEAR_DOWN);
 
-    // --- Gear shifting (disabled if locked) ---
-    if (!gearLocked) {
-      boolean gearUpPressed = driverJoystick.getRawButton(BUTTON_GEAR_UP);
-      boolean gearDownPressed = driverJoystick.getRawButton(BUTTON_GEAR_DOWN);
-
-      if (gearUpPressed && !gearUpPressedLast) {
-        if (currentGear < GEAR_FAST) {
-          currentGear++;
-        }
+    if (gearUpPressed && !gearUpPressedLast) {
+      if (currentGear < GEAR_FAST) {
+        currentGear++;
       }
-      if (gearDownPressed && !gearDownPressedLast) {
-        if (currentGear > GEAR_SLOW) {
-          currentGear--;
-        }
-      }
-
-      gearUpPressedLast = gearUpPressed;
-      gearDownPressedLast = gearDownPressed;
     }
+
+    if (gearDownPressed && !gearDownPressedLast) {
+      if (currentGear > GEAR_SLOW) {
+        currentGear--;
+      }
+    }
+
+    gearUpPressedLast = gearUpPressed;
+    gearDownPressedLast = gearDownPressed;
 
     // --- Drive control ---
     double rawSpeed = driverJoystick.getRawAxis(1);
@@ -188,7 +173,6 @@ public class Robot extends TimedRobot {
     double left = (curvedSpeed + curvedTurn) * effectiveSensitivity;
     double right = (curvedSpeed - curvedTurn) * effectiveSensitivity;
 
-    // Apply global min speed limit for all gears
     left = clampWithMin(left, -maxSpeed, maxSpeed, GEAR_MIN_SPEED);
     right = clampWithMin(right, -maxSpeed, maxSpeed, GEAR_MIN_SPEED);
 
@@ -232,10 +216,6 @@ public class Robot extends TimedRobot {
 
   private double applyDeadband(double value) {
     return Math.abs(value) < DEADZONE ? 0.0 : value;
-  }
-
-  private double clamp(double val, double min, double max) {
-    return Math.max(min, Math.min(max, val));
   }
 
   private double clampWithMin(double val, double min, double max, double minMagnitude) {
