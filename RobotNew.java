@@ -12,6 +12,32 @@ import edu.wpi.first.wpilibj.Timer;
 
 public class Robot extends TimedRobot {
 
+  /*
+  ===========================================================
+   LOGITECH F310 CONTROLLER BUTTON MAPPING (DIRECT INPUT MODE)
+   -----------------------------------------------------------
+   1  → A (Bottom)
+   2  → B (Right)
+   3  → X (Left / Square)
+   4  → Y (Top / Triangle)
+   5  → LB (Left Bumper)
+   6  → RB (Right Bumper)
+   7  → Back / Select
+   8  → Start
+   9  → Left Stick Press (L3)
+   10 → Right Stick Press (R3)
+
+   AXES:
+   0  → Left Stick X
+   1  → Left Stick Y
+   2  → Right Stick X
+   3  → Right Stick Y
+   4  → D-Pad X (some drivers)
+   5  → D-Pad Y (some drivers)
+   L2/R2 can appear as analog axes depending on driver mode.
+   ===========================================================
+  */
+
   // ===== Motor Definitions =====
   private static final SparkMax frontLeftMotor = new SparkMax(12, MotorType.kBrushed);
   private static final SparkMax backLeftMotor = new SparkMax(11, MotorType.kBrushed);
@@ -40,19 +66,34 @@ public class Robot extends TimedRobot {
 
   private static final double[] GEAR_MAX_SPEED = { 0.3, 0.5, 0.8 };
   private static final double[] GEAR_SENSITIVITY = { 0.4, 0.6, 0.8 };
-  private static final double GEAR_MIN_SPEED = GEAR_MAX_SPEED[0] * 0.2; // Base minimum speed shared by all gears
+  private static final double GEAR_MIN_SPEED = 0.1; // Shared minimum for all gears
 
-  // Button IDs (change if needed)
-  private static final int BUTTON_GEAR_UP = 7;     // L2
-  private static final int BUTTON_GEAR_DOWN = 8;   // R2
-  private static final int BUTTON_GEAR_LOCK = 2;   // Square button
+  // ===== Button Assignments (Based on Logitech F310) =====
+  private static final int BUTTON_A = 1;
+  private static final int BUTTON_B = 2;
+  private static final int BUTTON_X = 3; // Square equivalent
+  private static final int BUTTON_Y = 4;
+  private static final int BUTTON_LB = 5;
+  private static final int BUTTON_RB = 6;
+  private static final int BUTTON_BACK = 7;
+  private static final int BUTTON_START = 8;
+  private static final int BUTTON_L3 = 9;
+  private static final int BUTTON_R3 = 10;
 
+  // ===== Custom Control Bindings =====
+  private static final int BUTTON_GEAR_UP = BUTTON_RB;   // Gear up
+  private static final int BUTTON_GEAR_DOWN = BUTTON_LB; // Gear down
+  private static final int BUTTON_GEAR_LOCK = BUTTON_X;  // Lock/unlock gear
+  private static final int BUTTON_SHORT_LIFT = BUTTON_Y; // Short lift
+  private static final int BUTTON_MANUAL_LIFT = BUTTON_A; // Manual lift
+  private static final int BUTTON_TURBO = BUTTON_B; // Turbo mode toggle
+
+  // ===== State Tracking =====
   private boolean gearUpPressedLast = false;
   private boolean gearDownPressedLast = false;
   private boolean gearLockPressedLast = false;
   private boolean gearLocked = false;
 
-  // Lift control timing variables
   private boolean liftActive = false;
   private double liftStartTime = 0.0;
 
@@ -68,7 +109,6 @@ public class Robot extends TimedRobot {
     upMotor.configure(motorConfig, ResetMode.kResetSafeParameters, PersistMode.kPersistParameters);
   }
 
-  // ===== AUTONOMOUS =====
   @Override
   public void autonomousInit() {
     timer.reset();
@@ -93,7 +133,6 @@ public class Robot extends TimedRobot {
     }
   }
 
-  // ===== TELEOPERATED =====
   @Override
   public void teleopInit() {
     liftActive = false;
@@ -103,30 +142,34 @@ public class Robot extends TimedRobot {
 
   @Override
   public void teleopPeriodic() {
-    // ----- Gear lock toggle -----
+    // --- Gear lock toggle ---
     boolean gearLockPressed = driverJoystick.getRawButton(BUTTON_GEAR_LOCK);
     if (gearLockPressed && !gearLockPressedLast) {
       gearLocked = !gearLocked;
     }
     gearLockPressedLast = gearLockPressed;
 
-    // ----- Gear shifting -----
+    // --- Gear shifting (disabled if locked) ---
     if (!gearLocked) {
       boolean gearUpPressed = driverJoystick.getRawButton(BUTTON_GEAR_UP);
       boolean gearDownPressed = driverJoystick.getRawButton(BUTTON_GEAR_DOWN);
 
       if (gearUpPressed && !gearUpPressedLast) {
-        if (currentGear < GEAR_FAST) currentGear++;
+        if (currentGear < GEAR_FAST) {
+          currentGear++;
+        }
       }
       if (gearDownPressed && !gearDownPressedLast) {
-        if (currentGear > GEAR_SLOW) currentGear--;
+        if (currentGear > GEAR_SLOW) {
+          currentGear--;
+        }
       }
 
       gearUpPressedLast = gearUpPressed;
       gearDownPressedLast = gearDownPressed;
     }
 
-    // ----- Drive control -----
+    // --- Drive control ---
     double rawSpeed = driverJoystick.getRawAxis(1);
     double rawTurn = -driverJoystick.getRawAxis(4);
 
@@ -136,7 +179,7 @@ public class Robot extends TimedRobot {
     double curvedSpeed = Math.copySign(Math.pow(Math.abs(rawSpeed), 1.5), rawSpeed);
     double curvedTurn = Math.copySign(Math.pow(Math.abs(rawTurn), 1.5), rawTurn);
 
-    boolean turboMode = driverJoystick.getRawButton(5);
+    boolean turboMode = driverJoystick.getRawButton(BUTTON_TURBO);
     double sensitivity = turboMode ? TURBO_SENSITIVITY : NORMAL_SENSITIVITY;
 
     double effectiveSensitivity = (sensitivity * 0.7) + (GEAR_SENSITIVITY[currentGear] * 0.3);
@@ -145,15 +188,15 @@ public class Robot extends TimedRobot {
     double left = (curvedSpeed + curvedTurn) * effectiveSensitivity;
     double right = (curvedSpeed - curvedTurn) * effectiveSensitivity;
 
-    // Clamp output with shared min speed and gear-dependent max speed
+    // Apply global min speed limit for all gears
     left = clampWithMin(left, -maxSpeed, maxSpeed, GEAR_MIN_SPEED);
     right = clampWithMin(right, -maxSpeed, maxSpeed, GEAR_MIN_SPEED);
 
     setDrive(left, right);
 
-    // ----- Lift control -----
-    boolean shortLiftPressed = driverJoystick.getRawButton(3);
-    boolean manualLiftPressed = driverJoystick.getRawButton(1);
+    // --- Lift control ---
+    boolean shortLiftPressed = driverJoystick.getRawButton(BUTTON_SHORT_LIFT);
+    boolean manualLiftPressed = driverJoystick.getRawButton(BUTTON_MANUAL_LIFT);
 
     if (shortLiftPressed && !liftActive) {
       liftActive = true;
@@ -174,7 +217,7 @@ public class Robot extends TimedRobot {
     }
   }
 
-  // ===== UTILITY FUNCTIONS =====
+  // ===== Utility functions =====
   private void setDrive(double left, double right) {
     frontLeftMotor.set(left);
     backLeftMotor.set(left);
@@ -200,7 +243,8 @@ public class Robot extends TimedRobot {
     double sign = Math.signum(val);
     double abs = Math.abs(val);
     if (abs < minMagnitude) abs = minMagnitude;
-    return sign * Math.min(abs, max);
+    if (abs > max) abs = max;
+    return sign * abs;
   }
 
   @Override
