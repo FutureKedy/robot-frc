@@ -156,7 +156,7 @@ public class Robot extends TimedRobot {
 
     // --- Drive control ---
     double rawSpeed = driverJoystick.getRawAxis(1);
-    double rawTurn = -driverJoystick.getRawAxis(4);
+    double rawTurn = -driverJoystick.getRawAxis(2);
 
     rawSpeed = applyDeadband(rawSpeed);
     rawTurn = applyDeadband(rawTurn);
